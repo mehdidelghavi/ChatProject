@@ -1,0 +1,337 @@
+@import "fonts/font.css";
+:root {
+    /* Base */
+    --color-bg: #050816;
+    --color-bg-soft: #0f172a;
+    --color-surface: #1f2937;
+
+    /* Text */
+    --color-text: #e5e7eb;
+    --color-text-muted: #9ca3af;
+
+    /* Brand & accents */
+    --color-primary: #3b82f6;
+    --color-primary-soft: rgba(59, 130, 246, 0.12);
+    --color-secondary: #a855f7;
+
+    /* State colors */
+    --color-success: #22c55e;
+    --color-warning: #facc15;
+    --color-danger: #ef4444;
+
+    /* Borders & lines */
+    --color-border: #1f2937;
+    --color-border-subtle: rgba(148, 163, 184, 0.3);
+
+    /* Shadows */
+    --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.45);
+}  
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 2rem;
+    font-family: "IRANYekan", 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* Layout Desktop */
+main {
+    display: flex;
+    height: 100vh; /* این بار با vh راحت‌تر هستیم چون بدنه فیکس است */
+    width: 100vw;
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+#sidebar {
+width: 260px;
+background: var(--color-bg-soft);
+border-left: 1px solid var(--color-border-subtle);
+display: flex;
+flex-direction: column;
+overflow-y: auto;
+flex-shrink: 0;
+}
+
+.logoTypoGraphi,
+.usersOnline {
+padding: 16px 18px;
+}
+
+.logoTypoGraphi h1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+margin: 0;
+font-size: 1.3rem;
+color: var(--color-text);
+letter-spacing: 0.2px;
+font-family: Morabba-Bold;
+}
+
+.usersOnlineLists {
+list-style: none;
+padding: 0;
+margin: 0;
+}
+
+.usersOnlineLists li {
+padding: 11px 18px;
+cursor: pointer;
+color: var(--color-text);
+border-bottom: 1px solid var(--color-border-subtle);
+transition: background-color 0.15s ease;
+display: flex;
+align-items: center;
+justify-content: space-between;
+}
+
+.usersOnlineLists li svg{
+    color: var(--color-success);
+    font-size: 0.5rem;
+}
+
+.usersOnlineLists li:hover {
+background-color: var(--color-primary-soft);
+}
+
+/* Main column */
+#private-main{
+    flex-grow: 1;
+    display: none;
+    flex-direction: column;
+    height: 100%; /* از پدرش ارث می‌برد */
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+#main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* از پدرش ارث می‌برد */
+    overflow: hidden;
+    background: var(--color-bg);
+}
+
+/* Header */
+.chatContainerHeader,.privateChatContainerHeader {
+    padding: 14px 18px;
+    background: linear-gradient(
+      180deg,
+      rgba(59, 130, 246, 0.18) 0%,
+      rgba(168, 85, 247, 0.10) 100%
+    );
+    border-bottom: 1px solid var(--color-border-subtle);
+    color: var(--color-text);
+    flex-shrink: 0; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.privateChatContainerHeader{
+    justify-content: space-between;
+}
+
+.chatContainerHeader svg,.privateChatContainerHeader svg{
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+/* Chat area */
+.chatContainer,.privateChatContainer {
+    flex: 1;
+    overflow-y: auto; /* فقط این بخش اسکرول می‌خورد */
+    -webkit-overflow-scrolling: touch; /* برای نرمی اسکرول در آیفون */
+    padding: 18px;
+    background: radial-gradient(
+      circle at top left,
+      rgba(59, 130, 246, 0.10) 0%,
+      transparent 35%
+    );
+    scroll-behavior: smooth;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  scrollbar-color: rgba(100, 100, 100, 0.5) transparent;
+}
+
+.chatContainer::-webkit-scrollbar,.privateChatContainer::-webkit-scrollbar{
+    width: 6px;
+}
+
+.chatContainer::-webkit-scrollbar-track,.privateChatContainer::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .chatContainer::-webkit-scrollbar-thumb,.privateChatContainer::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 100, 0.4);
+    border-radius: 10px;
+    transition: background 0.3s ease;
+  }
+  
+  .chatContainer::-webkit-scrollbar-thumb:hover,.privateChatContainer::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 100, 100, 0.7);
+  }
+
+/* Input/footer */
+.chatButtons,.privateChatButtons {
+    padding: 14px 18px;
+    background: var(--color-bg-soft);
+    border-top: 1px solid var(--color-border-subtle);
+    flex-shrink: 0; /* این رو نگه دار */
+    /* height: 78px; -- این خط رو حذف یا کامنت کن */
+    display: flex;
+    align-items: center;
+}
+
+/* Form */
+.publicChatForm,.privateChatForm {
+width: 100%;
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+/* Message input */
+.messageInput,.privateMessageInput {
+flex-grow: 1;
+padding: 12px 16px;
+border: 1px solid var(--color-border-subtle);
+border-radius: 18px;
+background: rgba(31, 41, 55, 0.55);
+color: var(--color-text);
+outline: none;
+}
+
+.messageInput::placeholder,.privateMessageInput::placeholder {
+color: var(--color-text-muted);
+}
+
+.messageInput:focus,.privateMessageInput:focus {
+border-color: rgba(59, 130, 246, 0.7);
+box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+/* Send button */
+.chatButtons button,.privateChatButtons button {
+background: var(--color-primary);
+color: white;
+border: none;
+border-radius: 999px;
+cursor: pointer;
+width: 46px;
+height: 46px;
+display: flex;
+align-items: center;
+justify-content: center;
+box-shadow: var(--shadow-soft);
+transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.chatButtons button:hover,.privateChatButtons button:hover {
+background: #2563eb; /* یک shade نزدیک‌تر */
+transform: translateY(-1px);
+}
+
+/* ===== RTL helpers (اختیاری) ===== */
+[dir="rtl"] .chatButtons button,[dir="rtl"] .privateChatButtons button { margin-left: 0; }
+
+.chatMessage,.privateChatMessage {
+    margin: 10px 0;
+}
+
+.chat,.privateChat {
+    background-color: var(--color-bg-soft);
+    padding: 10px 16px;
+    max-width: calc(100% - 100px);
+    word-wrap: break-word;
+}
+
+.chat.self{
+    background-color: var(--color-primary);
+}
+
+.chatUser{
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    flex-flow: row-reverse;
+    justify-content: space-between;
+}
+.chatUser span{
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+.chatUser small{
+    font-size: 0.7rem;
+}
+
+.chatText p{
+    font-size: 0.8rem;
+}
+.privateChatTyping {
+    text-align: center;
+}
+.toggleMenu{
+    position: fixed;
+    border-radius: 50%;
+    top: 50%;
+    margin-top: -30px;
+    right: -35px;
+    height: 60px;
+    width: 60px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    background-color: var(--color-border);
+}
+.toggleMenu svg{
+    margin-right: 30px;
+}
+/* Hide sidebar on mobile */
+@media (max-width: 768px) {
+    .toggleMenu{
+        display: flex;
+    }
+    #sidebar {
+        display: none;
+    }
+
+    .sidebarActive{
+        position: fixed;
+        height: 100%;
+        max-height: 100%;
+        display: flex !important;
+    }
+    main {
+        display: block; /* یا flex ولی #sidebar مخفی میشه و #main خودکار می‌مونه */
+        height: 100vh;
+    }
+
+    #main {
+        height: 100vh;
+    }
+
+    .chatContainer,.privateChatContainer {
+        padding: 14px;
+    }
+
+    .chatButtons,.privateChatButtons {
+        height: 74px;
+        padding: 12px 14px;
+        margin-bottom: 50px;
+    }
+}

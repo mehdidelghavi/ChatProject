@@ -1,0 +1,231 @@
+:root {
+    /* Base */
+    --color-bg: #050816;
+    --color-bg-soft: #0f172a;
+    --color-surface: #1f2937;
+
+    /* Text */
+    --color-text: #e5e7eb;
+    --color-text-muted: #9ca3af;
+
+    /* Brand & accents */
+    --color-primary: #3b82f6;
+    --color-primary-soft: rgba(59, 130, 246, 0.12);
+    --color-secondary: #a855f7;
+
+    /* State colors */
+    --color-success: #22c55e;
+    --color-warning: #facc15;
+    --color-danger: #ef4444;
+
+    /* Borders & lines */
+    --color-border: #1f2937;
+    --color-border-subtle: rgba(148, 163, 184, 0.3);
+
+    /* Shadows */
+    --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.45);
+}  
+
+*{
+    box-sizing: border-box;
+}
+
+ul{
+    list-style: none;
+}
+
+html, body{
+    height: 100%;
+}
+
+body{
+    direction: rtl;
+    font-size: 0.9rem;
+    padding: 0;
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    overflow: hidden;
+}
+
+main{
+    display: flex;
+}
+
+#sidebar{
+    min-width: 285px;
+    max-width: 285px;
+    height: 100vh;
+    background-color: var(--color-bg-soft);
+}
+
+#main{
+    width: 100%;
+    min-height: 100vh;
+    background-color: var(--color-surface);
+}
+
+.logoTypoGraphi{
+    width: 100%;
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--color-border);
+}
+.logoTypoGraphi h1{
+    font-size: 1.9rem;
+}
+
+.usersOnline{
+    width: 100%;
+    max-height: calc(100vh - 90px);
+    overflow-y: scroll;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.1) transparent;
+    transition: scrollbar-color 0.3s ease;
+    position: relative;
+}
+
+.usersOnline::-webkit-scrollbar{
+    width: 8px;
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+.usersOnline::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.usersOnline::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+}
+
+.usersOnline:hover::-webkit-scrollbar-thumb,
+.usersOnline:active::-webkit-scrollbar-thumb {
+  background-color: #fff !important;
+}
+
+.usersOnline ul{
+    padding: 0 10px !important;
+    margin: 10px 0 !important;
+}
+
+.usersOnline ul li{
+    width: 100%;
+    padding: 1rem !important;
+    display: flex;
+    align-items: center;
+    transition: all 0.1s ease;
+}
+
+.usersOnline ul li:hover{
+    cursor: pointer;
+    background-color: var(--color-bg);
+}
+
+.chatButtons{
+    width: 100%;
+    height: 60px;
+    background-color: var(--color-bg-soft);
+    position: relative;
+}
+
+.chatButtons input[type="text"]{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    background-color: var(--color-bg-soft);
+    border: none;
+    padding:0 2rem 0 60px !important;
+    color: var(--color-text);
+    z-index: 9;
+}
+
+.chatButtons button[type="submit"]{
+    position: absolute;
+    z-index: 99;
+    width: 60px;
+    height: 60px;
+    left: 0;
+    transform: rotate(180deg);
+    background-color: inherit;
+    border: none;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chatContainer{
+    width: 100%;
+    min-height: calc(100vh - 120px);
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+    overflow-y: scroll;
+}
+
+.chatMessage{
+    width: 100%;
+    margin: 10px 0 !important;
+    padding: 10px 16px !important;
+}
+
+.chat{
+    padding: 10px 16px !important;
+    background-color: var(--color-bg);
+    box-shadow: 3px 3px 3px 0 var(--color-bg-soft);
+}
+
+.chat.self{
+    background-color: var(--color-bg-soft);
+}
+
+.chatUser{
+    margin-bottom: 15px !important;
+}
+
+.chatUser span{
+    font-size: 1rem;
+}
+
+.chatText p{
+    font-size: 0.8rem;
+}
+
+#login{
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card{
+    width: 480px;
+    background-color: var(--color-surface);
+    padding: 10px 16px !important;
+}
+
+.chatContainerHeader{
+    height: 60px;
+    background-color: var(--color-bg-soft);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 1.3rem;
+}
+
+.chatContainerHeader span{
+    font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+    #sidebar{
+        display: none !important;
+    }
+}

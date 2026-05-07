@@ -1,0 +1,441 @@
+<%- include('./includes/header') %>
+<main>
+    <div class="toggleMenu">
+        <i class="fa fa-angle-left"></i>
+    </div>
+    <section id="sidebar" class="">
+        <div class="logoTypoGraphi">
+            <h1>
+                پشت پرده
+            </h1>
+        </div>
+        <div class="usersOnline">
+            <ul class="usersOnlineLists">
+                <li class="rounded-4 startPrivateChat" data-userid="1">informant</li>
+            </ul>
+        </div>
+    </section>
+    <section id="private-main">
+        <div class="privateChatContainerHeader">
+            <div class="privateChatTyping flex-fill">چت خصوصی</div>
+            <div class="closePrivate flex-shrink-1">
+                <i class="fa fa-arrow-left"></i>
+            </div>
+        </div>
+        <div class="privateChatContainer">
+        </div>
+        <div class="privateChatButtons">
+            <form action="" method="POST" class="privateChatForm">
+                <input type="hidden" name="privateRoomId" value="0">
+                <input type="text" class="privateMessageInput" placeholder="پیغام خود را بنویسید.." name="text" dir="rtl" autocomplete="off">
+                <button type="submit">
+                    <i class="fa fa-send"></i>
+                </button>
+            </form>
+        </div>
+    </section>
+    <section id="main">
+        <div class="chatContainerHeader">
+            چت عمومی
+        </div>
+        <div class="chatContainer">
+            <% publicChats.forEach(chatItem => { %>
+                <% const date = new Date(chatItem.created_at);const timeString = date.toLocaleTimeString('en-US', {
+                    timeZone: 'Asia/Tehran',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true // این پارامتر باعث می‌شود فرمت AM/PM فعال شود
+                }); %>
+            <div class="chatMessage d-flex justify-content-<% if (chatItem.user_id == user.id){ %>start<% }else{ %>end<% } %>">
+                <div class="chat rounded-4 <% if (chatItem.user_id == user.id){ %>self<% } %>">
+                    <div class="chatUser">
+                        <span><%= chatItem.username %></span> 
+                        <small><%= timeString %></small>
+                    </div>
+                    <div class="chatText">
+                        <p>
+                            <%= chatItem.text %>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <% }) %>
+        </div>
+        <div class="chatButtons">
+            <form action="" method="POST" class="publicChatForm">
+                <input type="hidden" name="userId">
+                <input type="hidden" name="token">
+                <input type="text" class="messageInput" placeholder="پیغام خود را بنویسید.." name="text" dir="rtl" autocomplete="off">
+                <button type="submit">
+                    <i class="fa fa-send"></i>
+                </button>
+            </form>
+        </div>
+    </section>
+</main>
+<div id="toast-notification" class="toast-notification"></div>
+<script src="/assets/js/jquery-3.7.1.js"></script>
+<script src="/assets/js/bootstrap.js"></script>
+<script src="/assets/js/all.js"></script>
+<script src="/assets/js/socket.io.js"></script>
+<script src="/assets/js/Toast.js"></script>
+<script>
+const userId = `<%= user.id %>`;
+const username = `<%= user.username %>`;
+const isLoggedIn = `<%= isAuth %>`;
+const Token = localStorage.getItem("token");
+const publicChatForm = document.querySelector(".publicChatForm");
+const privateChatForm = document.querySelector(".privateChatForm");
+const userIdInput = document.querySelector("input[name=userId]");
+let privateRoomId = document.querySelector("input[name=privateRoomId]").value;
+const tokenInput = document.querySelector("input[name=token]");
+const chatContainer = document.querySelector(".chatContainer");
+const usersOnlineLists = document.querySelector(".usersOnlineLists");
+const messageInput = document.querySelector(".messageInput");
+const privateMessageInput = document.querySelector(".privateMessageInput");
+const isTypingContainer = document.querySelector(".chatContainerHeader");
+const privateChatContainer = document.querySelector(".privateChatContainer");
+let typingTimer;
+let privateTypingTimer;
+let isTyping = false;
+let privateIsTyping = false;
+let usersTypingArray= new Set();
+userIdInput.value = userId;
+tokenInput.value = Token;
+const socket = io("http://192.168.1.100:3000",{
+    auth: {
+        token: Token
+    }
+});
+privateMessageInput.addEventListener("input", () => {
+    if (!privateIsTyping) {
+        socket.emit('privateTyping', {username: username, token: Token, userId: userId,privateRoomId: privateRoomId});
+        privateIsTyping = true;
+    } 
+    clearTimeout(privateTypingTimer);
+    privateTypingTimer = setTimeout(() => {
+        socket.emit('privateStopTyping', {username: username, token: Token, userId: userId,privateRoomId: privateRoomId});
+        privateIsTyping = false;
+    }, 1000);
+});
+messageInput.addEventListener("input", () => {
+    if (!isTyping) {
+        socket.emit('typing', {username: username, token: Token, userId: userId,privateRoomId: privateRoomId});
+        isTyping = true;
+    } 
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => {
+        socket.emit('stopTyping', {username: username, token: Token, userId: userId,privateRoomId: privateRoomId});
+        isTyping = false;
+    }, 1000);
+});
+function showDangerToast(message) {
+  const dangerToast = Toast.makeText(
+    document.body,
+    message,
+    Toast.LENGTH_SHORT
+  );
+  dangerToast.setStyle(Toast.STYLE_ERROR)
+  dangerToast.setPosition(Toast.POSITION_TOP_CENTER)
+  dangerToast.setAnimation(Toast.SLIDE_IN_TOP_CENTER,Toast.SLIDE_OUT_TOP_CENTER)
+  dangerToast.show();
+}
+
+function showSuccessToast(message) {
+  const successToast = Toast.makeText(
+    document.body,
+    message,
+    Toast.LENGTH_SHORT
+  );
+  successToast.setStyle(Toast.STYLE_SUCCESS)
+  successToast.setPosition(Toast.POSITION_TOP_CENTER)
+  successToast.setAnimation(Toast.SLIDE_IN_TOP_CENTER,Toast.SLIDE_OUT_TOP_CENTER)
+  successToast.show();
+}
+publicChatForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const formData = new FormData(publicChatForm);
+    const data = Object.fromEntries(formData.entries());
+    sendMessage(data);
+});
+
+privateChatForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const formData = new FormData(privateChatForm);
+    const data = Object.fromEntries(formData.entries());
+    data.username = username;
+    data.userId = userId;
+    data.token = Token;
+    privateSendMessage(data);
+});
+
+socket.on("connect", () => {
+    socket.emit("identifyUser", {userId: userId, username: username});
+});
+const isTypingUsers = document.createElement("span");
+isTypingUsers.classList.add("isTyping");
+socket.on("privateUserTyping", (data) => {
+    if (data.room == privateRoomId){
+        $(".privateChatTyping").html(`${data.username} در حال نوشتن.....`);
+    }
+});
+socket.on("privateUserStopTyping", (data) => {
+    $(".privateChatTyping").html(data.username);
+});
+socket.on("userTyping", (data) => {
+    if (!usersTypingArray.has(data)){
+        usersTypingArray.add(data);
+    }
+    const usersArray = Array.from(usersTypingArray);
+    
+    let isTypingMessage = "";
+    if (usersArray.length === 1) {
+        isTypingMessage += `${usersArray[0]} در حال نوشتن...`;
+    } else if (usersArray.length === 2) {
+        isTypingMessage += `${usersArray[0]}, ${usersArray[1]} در حال نوشتن...`;
+    } else {
+        isTypingMessage += `${dataItem},`;
+        typingMessage = `${usersArray[0]}, ${usersArray[1]}, ${usersArray[2]} و ${usersArray.length - 3} دیگر در حال نوشتن...`;
+    }
+    isTypingUsers.innerHTML = isTypingMessage;
+    isTypingContainer.innerHTML = "";
+    isTypingContainer.appendChild(isTypingUsers);
+});
+
+socket.on("userStoppedTyping", (data) => {
+    usersTypingArray.delete(data);
+    if (usersTypingArray.size == 0){
+        isTypingContainer.innerHTML = "چت عمومی";
+    } else {
+        const usersArray = Array.from(usersTypingArray);
+        let isTypingMessage = "";
+        if (usersArray.length === 1) {
+            isTypingMessage += `${usersArray[0]} در حال نوشتن...`;
+        } else if (usersArray.length === 2) {
+            isTypingMessage += `${usersArray[0]}, ${usersArray[1]} در حال نوشتن...`;
+        } else {
+            isTypingMessage += `${dataItem},`;
+            typingMessage = `${usersArray[0]}, ${usersArray[1]}, ${usersArray[2]} و ${usersArray.length - 3} نفر دیگر در حال نوشتن...`;
+        }
+        isTypingMessage += "در حال نوشتن...";
+        isTypingUsers.innerHTML = isTypingMessage;
+        isTypingContainer.innerHTML = "";
+        isTypingContainer.appendChild(isTypingUsers);
+    }
+});
+
+socket.on("errorMessage", () => {
+    console.log("Redirect to login");
+});
+
+socket.on("updateOnlineUsers", (users) => {
+    usersOnlineLists.innerHTML = '';
+    users.forEach( userItem => {
+        const listItem = document.createElement("li");
+        listItem.innerHTML = userItem.username + "<i class='fa fa-circle'></>";
+        listItem.classList.add("rounded-4");
+        listItem.classList.add("startPrivateChat");
+        listItem.setAttribute("data-userId", userItem.userId);
+        usersOnlineLists.appendChild(listItem);
+    });
+});
+
+$(".usersOnlineLists").on("click", "li.startPrivateChat",function (){
+    let privateOtherUserId = $(this).data('userid');
+    if (Number(userId) != Number(privateOtherUserId)){
+        socket.emit("startPrivateChat", {userId: Number(userId), otherUser: Number(privateOtherUserId), token: Token});
+    }
+});
+
+socket.on("openPrivateChat", (data) => {
+    $("#main").css("display", "none");
+    $("#private-main").css("display", "flex");
+    $(".privateChatTyping").text(data.otherUser[0].username);
+    privateRoomId = data.room;
+    $("input[name=privateRoomId]").val(privateRoomId);
+    let chatsBoxes = "";
+    data.chats.forEach(chatItem => {
+        const justify = chatItem.user_id == userId ? "start": "end";
+        const self = chatItem.user_id == userId ? "self" : "";
+        const date = new Date(chatItem.created_at);
+        const timeString = date.toLocaleTimeString('en-US', {
+            timeZone: 'Asia/Tehran',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true // این پارامتر باعث می‌شود فرمت AM/PM فعال شود
+        });
+        chatsBoxes += `<div class="chatMessage d-flex justify-content-${justify}">
+                <div class="chat rounded-4 ${self}">
+                    <div class="chatUser">
+                        <span>${chatItem.username}</span> 
+                        <small>${timeString}</small>
+                    </div>
+                    <div class="chatText">
+                        <p>
+                            ${chatItem.text}
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+    });
+    $(".privateChatContainer").html(chatsBoxes);
+});
+
+socket.on("validationError", (data) => {
+    showDangerToast(data.message);
+});
+
+
+
+
+socket.on("getPublicMessage", (data) => {
+
+    let sore = "end";
+    let self = "";
+
+    const date = new Date(data.chat.created_at);
+
+    const timeString = date.toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Tehran',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    if (data.chat.user_id == userId){
+        sore = "start";
+        self = "self";
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = `chatMessage d-flex justify-content-${sore}`;
+
+    const chat = document.createElement("div");
+    chat.className = `chat rounded-4 ${self}`;
+
+    const chatUser = document.createElement("div");
+    chatUser.className = "chatUser";
+
+    const username = document.createElement("span");
+    username.textContent = data.chat.username;
+
+    const time = document.createElement("small");
+    time.textContent = timeString;
+
+    chatUser.appendChild(username);
+    chatUser.appendChild(time);
+
+    const chatText = document.createElement("div");
+    chatText.className = "chatText";
+
+    const p = document.createElement("p");
+    p.textContent = data.chat.text;
+
+    chatText.appendChild(p);
+
+    chat.appendChild(chatUser);
+    chat.appendChild(chatText);
+
+    wrapper.appendChild(chat);
+
+    chatContainer.appendChild(wrapper);
+
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+});
+
+// socket.emit("join_private_channel", ({room: 2, userId: userId}));
+socket.on("getPrivateMessage", (data) => {
+    if (data.chat.room_id == privateRoomId){
+        let sore = "end";
+        let self = "";
+
+        const date = new Date(data.chat.created_at);
+
+        const timeString = date.toLocaleTimeString('en-US', {
+            timeZone: 'Asia/Tehran',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        if (data.chat.user_id == userId){
+            sore = "start";
+            self = "self";
+        }
+
+        const wrapper = document.createElement("div");
+        wrapper.className = `chatMessage d-flex justify-content-${sore}`;
+
+        const chat = document.createElement("div");
+        chat.className = `chat rounded-4 ${self}`;
+
+        const chatUser = document.createElement("div");
+        chatUser.className = "chatUser";
+
+        const username = document.createElement("span");
+        username.textContent = data.chat.username;
+
+        const time = document.createElement("small");
+        time.textContent = timeString;
+
+        chatUser.appendChild(username);
+        chatUser.appendChild(time);
+
+        const chatText = document.createElement("div");
+        chatText.className = "chatText";
+
+        const p = document.createElement("p");
+        p.textContent = data.chat.text;
+
+        chatText.appendChild(p);
+
+        chat.appendChild(chatUser);
+        chat.appendChild(chatText);
+
+        wrapper.appendChild(chat);
+
+        privateChatContainer.appendChild(wrapper);
+
+        privateChatContainer.scrollTop = privateChatContainer.scrollHeight;
+    }
+});
+
+socket.on("UnAuthorized", (data) => {
+    localStorage.removeItem("token");
+    showDangerToast(data);
+});
+
+function privateSendMessage(data){
+    socket.emit("sendMessagePrivate", data);
+    privateChatForm.reset();
+}
+function sendMessage(data){
+    socket.emit("sendMessage", data);
+    publicChatForm.reset();
+}
+
+$(".closePrivate").on("click", function (){
+    socket.emit("leavePrivate", privateRoomId);
+    $("#main").css("display", "flex");
+    $("#private-main").css("display", "none");
+    $(".privateChatTyping").text("چت خصوصی");
+    privateRoomId = 0;
+    $("input[name=privateRoomId]").val(0);
+    let chatsBoxes = "";
+    $(".privateChatContainer").html("");
+});
+
+$(".toggleMenu").on("click", function (){
+    if ($("#sidebar").hasClass("sidebarActive")){
+        $(".toggleMenu").css("right", "-35px");
+        $("#sidebar").removeClass("sidebarActive");
+        $(".toggleMenu").html("<i class='fa fa-angle-left'></i>");
+    } else {
+        $("#sidebar").addClass("sidebarActive");
+        $(".toggleMenu").css("right", "225px");
+        $(".toggleMenu").html("<i class='fa fa-angle-right'></i>");
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<%- include("../includes/header") %>
+<section id="login">
+  <div class="login-card rounded-4">
+    <h4 class="text-center mb-4">ورود به حساب کاربری</h4>
+    <form action="/login" method="post" class="loginForm" id="loginForm">
+      <div class="mb-3">
+        <label for="username" class="form-label">نام کاربری</label>
+        <input type="text" class="form-control" id="username" name="username" placeholder="Majesty">
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">رمز عبور</label>
+        <input type="password" class="form-control" id="password" name="password" placeholder="******">
+      </div>
+      <button type="submit" class="btn btn-primary w-100" id="loginButton">ورود</button>
+    </form>
+  </div>
+</section>
+<div id="toast-notification" class="toast-notification"></div>
+<script src="/assets/js/jquery-3.7.1.js"></script>
+<script src="/assets/js/popover.js"></script>
+<script src="/assets/js/bootstrap.js"></script>
+<script src="/assets/js/all.js"></script>
+<script src="/assets/js/Toast.js"></script>
+<script src="/assets/js/main.js"></script>
+<script>
+const loginForm = document.querySelector("#loginForm");
+loginForm.addEventListener("submit", function (e){
+  e.preventDefault();
+  const formData = new FormData(loginForm);
+  const data = Object.fromEntries(formData.entries());
+  fetch("http://192.168.1.100:3000/login", {
+    method: "POST",
+    headers:{
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  }).then(result => {
+    return result.json();
+  }).then(data => {
+    if (data.status != 200){
+      if (data.status == 422){
+        let errors = data.errors;
+        Object.entries(errors).forEach(([key , value]) => {
+          showDangerToast(data.message + " " + value[0]);
+        });
+      } else {
+        showDangerToast(data.message);
+      }
+    } else {
+      localStorage.setItem('token', data.token);
+      window.location.href = `http://192.168.1.100:3000/?token=${data.token}`;
+    }
+  }).catch(err => {
+    console.log(err);
+  });
+});
+function showDangerToast(message) {
+  const dangerToast = Toast.makeText(
+    document.body,
+     message,
+    Toast.LENGTH_SHORT
+  );
+  dangerToast.setStyle(Toast.STYLE_ERROR)
+  dangerToast.setPosition(Toast.POSITION_TOP_CENTER)
+  dangerToast.setAnimation(Toast.SLIDE_IN_TOP_CENTER,Toast.SLIDE_OUT_TOP_CENTER)
+  dangerToast.show();
+}
+</script>
+<% if (errorMessage != null) { %>
+  <script>
+    showDangerToast(`<%= errorMessage %>`);
+  </script>
+<% } %>
+</body>
+</html>
