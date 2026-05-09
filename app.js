@@ -14,6 +14,7 @@ var flash = require('connect-flash');
 const chatController = require("./controllers/chat/chat");
 const { z } = require("zod");
 const { chatSchema } = require("./validations/chat.validation");
+const jwt = require("jsonwebtoken");
 
 const sessionStore = new MYSQLStore({}, db);
 
@@ -49,10 +50,25 @@ app.use(loginRoute);
 app.use(chatRoute);
 app.use(require('./middlewares/errorHandler'));
 
+function emitOnlineUsers() {
+
+    io.emit(
+        "updateOnlineUsers",
+        Array.from(
+            onlineUsers,
+            ([userId, data]) => ({
+                userId,
+                username: data.username
+            })
+        )
+    );
+}
+
 let typingUsers = new Set();
 
 const messageLimiter = new Map();
 
+// This fuction handle spams
 function isRateLimited(socketId) {
 
     const now = Date.now();
@@ -88,21 +104,51 @@ function isRateLimited(socketId) {
     return false;
 }
 
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        socket.user = decoded.user;
+
+        next();
+    } catch {
+        next(new Error("Unauthorized"));
+    }
+});
+// Start socket connection
 io.on("connection", (socket) => {
 
 
+    // Handle user connection to socket and add user to online users Map
     socket.on("identifyUser", (userData) => {
-        onlineUsers.set(userData.userId, userData.username);
-        socketIdToUserIdMap.set(socket.id, userData.userId);
-        io.emit("updateOnlineUsers", Array.from(onlineUsers, ([userId, username]) => ({ userId, username })));
+        const userId = socket.user.id;
+        if (!onlineUsers.has(userId)) {
+
+            onlineUsers.set(userId, {
+                username: socket.user.username,
+                sockets: new Set()
+            });
+        }
+
+        onlineUsers.get(userId).sockets.add(socket.id);
+
+        socketIdToUserIdMap.set(socket.id, userId);
+        emitOnlineUsers();
     });
 
+    // Handle user typing in private chat
     socket.on("privateTyping", (data) => {
         socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserTyping", { username: data.username, room: data.privateRoomId });
     });
+
+    // Handle user stop typing in private chat
     socket.on("privateStopTyping", (data) => {
         socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserStopTyping", { username: data.username, room: data.privateRoomId });
     });
+
+    // Handle user typing in global chat
     socket.on("typing", (data) => {
         if (!typingUsers.has(data.username)) {
             typingUsers.add(data.username);
@@ -110,16 +156,18 @@ io.on("connection", (socket) => {
         }
     });
 
+    // Handle user stop typing in global chat
     socket.on("stopTyping", (data) => {
         typingUsers.delete(data.username);
         socket.broadcast.emit('userStoppedTyping', data.username);
     });
 
-    // Handle Send Message to Clients
+    // Handle send message to global chat
     socket.on("sendMessage", async (data) => {
         const isAuth = socketMiddleware.socketAuth(data.token);
         if (isAuth) {
             const parsed = chatSchema.safeParse(data);
+            data.userId = socket.user.id;
             if (!parsed.success) {
                 io.to(socket.id).emit('validationError', {
                     success: false,
@@ -144,6 +192,7 @@ io.on("connection", (socket) => {
         }
     });
 
+    // Handle send message in private
     socket.on("sendMessagePrivate", async (data) => {
         const isAuth = socketMiddleware.socketAuth(data.token);
         if (isAuth) {
@@ -166,6 +215,7 @@ io.on("connection", (socket) => {
                 return;
             }
             // Handle Save Message To Database
+            data.userId = socket.user.id;
             const sendMessage = await chatController.sendMessage(data);
             io.to(socket.privateChannelId).emit("getPrivateMessage", sendMessage);
         } else {
@@ -173,7 +223,10 @@ io.on("connection", (socket) => {
         }
     });
 
+
+    // Handle start private chat for user
     socket.on("startPrivateChat", async (data) => {
+        data.userId = socket.user.id;
         const isAuth = socketMiddleware.socketAuth(data.token);
         if (isAuth) {
             // Check If Conversation (room) Exist
@@ -186,29 +239,38 @@ io.on("connection", (socket) => {
         }
     });
 
+
+    // Handle if user close private chat
     socket.on("leavePrivate", (data) => {
         socket.privateChannelId = 0;
         socket.leave("private_channel_" + data);
     });
 
 
+    // Handle user disconnecting 
     socket.on('disconnect', () => {
-        // پیدا کردن userId کاربر بر اساس socket.id از نگاشت
         const userId = socketIdToUserIdMap.get(socket.id);
 
-        if (userId) {
-            const username = onlineUsers.get(userId);
-            onlineUsers.delete(userId); // حذف از لیست کاربران آنلاین
-            socketIdToUserIdMap.delete(socket.id); // حذف از نگاشت socket ID
+        if (!userId) return;
 
-            // ارسال لیست به‌روز شده کاربران آنلاین به همه کلاینت‌ها
-            const usersArray = Array.from(onlineUsers, ([userId, username]) => ({ userId, username }));
-            io.emit("updateOnlineUsers", usersArray);
-        } else {
-            console.warn(`Socket ID ${socket.id} در نگاشت کاربران آنلاین یافت نشد.`);
+        const user = onlineUsers.get(userId);
+
+        if (!user) return;
+
+        user.sockets.delete(socket.id);
+
+        socketIdToUserIdMap.delete(socket.id);
+
+        if (user.sockets.size === 0) {
+
+            onlineUsers.delete(userId);
+
         }
+        emitOnlineUsers();
     });
+
 });
+
 
 server.listen(process.env.port, () => {
     console.log(`App is Running on Port ${process.env.port}`);
