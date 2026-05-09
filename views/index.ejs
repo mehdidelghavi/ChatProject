@@ -10,6 +10,7 @@
             </h1>
         </div>
         <div class="usersOnline">
+            <button type="button" class="btn btn-outline-warning mb-3 logout">خروج از حساب</button>
             <ul class="usersOnlineLists">
                 <li class="rounded-4 startPrivateChat" data-userid="1">informant</li>
             </ul>
@@ -102,7 +103,9 @@ let privateIsTyping = false;
 let usersTypingArray= new Set();
 userIdInput.value = userId;
 tokenInput.value = Token;
-const socket = io("http://192.168.1.100:3000",{
+const host = "http://192.168.1.100";
+const port = "3000";
+const socket = io(`${host}:${port}`,{
     auth: {
         token: Token
     }
@@ -435,6 +438,11 @@ $(".toggleMenu").on("click", function (){
         $(".toggleMenu").css("right", "225px");
         $(".toggleMenu").html("<i class='fa fa-angle-right'></i>");
     }
+});
+
+$(".logout").on("click", function (){
+    localStorage.removeItem("token");
+    window.location.href = `${host}:${port}/login`;
 });
 </script>
 </body>
