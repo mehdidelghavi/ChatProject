@@ -1,5 +1,6 @@
 const db = require("../../init/db");
 const jwt = require("jsonwebtoken");
+const sanitizeHtml = require("sanitize-html");
 
 exports.getChat = async (req, res) => {
     const token = req.query.token;
@@ -32,7 +33,7 @@ exports.sendMessage = async (data) => {
         const { text, userId } = data;
         let room = data.privateRoomId || 1;
         const sql = 'INSERT INTO chats (user_id, room_id, text) VALUES (?,?,?)';
-        const values = [userId, room, text];
+        const values = [userId, room, sanitizeHtml(text)];
         const [result] = await db.execute(sql, values);
         const newChatId = result.insertId;
         const query = `
