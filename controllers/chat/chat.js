@@ -9,22 +9,34 @@ exports.getChat = async (req, res) => {
         user = decoded;
     })
     const sql = `SELECT
-    t.*,
-    u.username
-FROM (
-    SELECT *
-    FROM chats
-    WHERE room_id = 1
-    ORDER BY id DESC
-    LIMIT 20
-) AS t
-JOIN users u ON t.user_id = u.id
-ORDER BY t.id ASC`;
+                t.*,
+                u.username
+                FROM (
+                    SELECT *
+                    FROM chats
+                    WHERE room_id = 1
+                    ORDER BY id DESC
+                    LIMIT 20
+                ) AS t
+                JOIN users u ON t.user_id = u.id
+                ORDER BY t.id ASC`;
     const [rows] = await db.execute(sql);
+    const conversationSQL = `SELECT 
+                            r.id AS room_id,
+                            u2.id AS other_user_id,
+                            u2.username AS other_user_name
+                            FROM rooms r
+                            JOIN room_user ru1 ON ru1.room_id = r.id
+                            JOIN room_user ru2 ON ru2.room_id = r.id AND ru2.user_id != ru1.user_id
+                            JOIN users u2 ON u2.id = ru2.user_id
+                            WHERE ru1.user_id = ?`;
+    const [rows2] = await db.execute(conversationSQL, [user.user.id]);
     res.render('index', {
         user: user.user,
         isAuth: true,
         publicChats: rows,
+        privateChats: rows2,
+        title: "پشت پرده"
     });
 }
 
@@ -67,17 +79,17 @@ exports.getRoomFormUserIds = async (data) => {
         const [existingRooms] = await db.execute(checkSql, [userId, otherUser]);
         if (existingRooms.length > 0) {
             const chatSql = `SELECT
-    t.*,
-    u.username
-FROM (
-    SELECT *
-    FROM chats
-    where room_id = ?
-    ORDER BY id DESC
-    LIMIT 20
-) AS t
-JOIN users u ON t.user_id = u.id
-ORDER BY t.id ASC`;
+                                t.*,
+                                u.username
+                            FROM (
+                                SELECT *
+                                FROM chats
+                                where room_id = ?
+                                ORDER BY id DESC
+                                LIMIT 20
+                            ) AS t
+                            JOIN users u ON t.user_id = u.id
+                            ORDER BY t.id ASC`;
             const [rows] = await db.execute(chatSql, [existingRooms[0].room_id]);
             const chats = rows;
             const room_id = existingRooms[0].room_id;
@@ -96,17 +108,17 @@ ORDER BY t.id ASC`;
             INSERT INTO room_user (room_id, user_id) VALUES (?, ?), (?, ?)`;
             await db.execute(insertRoomUserSql, [room_id, userId, room_id, otherUser]);
             const chatSql = `SELECT
-    t.*,
-    u.username
-FROM (
-    SELECT *
-    FROM chats
-    ORDER BY id DESC
-    where room_id = ?
-    LIMIT 20
-) AS t
-JOIN users u ON t.user_id = u.id
-ORDER BY t.id ASC`;
+                                t.*,
+                                u.username
+                            FROM (
+                                SELECT *
+                                FROM chats
+                                where room_id = ?
+                                ORDER BY id DESC
+                                LIMIT 20
+                            ) AS t
+                            JOIN users u ON t.user_id = u.id
+                            ORDER BY t.id ASC`;
             const [rows] = await db.execute(chatSql, [room_id]);
             const chats = rows;
             const otherUserSql = "SELECT username,id FROM users where id = ? LIMIT 1";
@@ -115,6 +127,6 @@ ORDER BY t.id ASC`;
             return { chats: chats, room: room_id, otherUser: otherUserInfo };
         }
     } catch (e) {
-        console.log(e);
+        return e;
     }
 }

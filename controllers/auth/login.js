@@ -13,7 +13,8 @@ exports.getLogin = (req, res) => {
         message = null;
     }
     res.render("auth/login", {
-        errorMessage: message
+        errorMessage: message,
+        title: 'صفحه ورود'
     });
 }
 

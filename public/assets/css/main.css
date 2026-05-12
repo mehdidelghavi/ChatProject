@@ -98,13 +98,13 @@ letter-spacing: 0.2px;
 font-family: Morabba-Bold;
 }
 
-.usersOnlineLists {
+.usersOnlineLists,.roomsLists {
 list-style: none;
 padding: 0;
 margin: 0;
 }
 
-.usersOnlineLists li {
+.usersOnlineLists li,.roomsLists li {
 padding: 11px 18px;
 cursor: pointer;
 color: var(--color-text);
@@ -120,7 +120,7 @@ justify-content: space-between;
     font-size: 0.5rem;
 }
 
-.usersOnlineLists li:hover {
+.usersOnlineLists li:hover,.roomsLists li:hover {
 background-color: var(--color-primary-soft);
 }
 
@@ -322,6 +322,32 @@ transform: translateY(-1px);
 .toggleMenu svg{
     margin-right: 30px;
 }
+
+.nav-tabs .nav-link{
+    border-radius: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    border: 0;
+}
+
+.nav-tabs .nav-link.active, .nav-tabs .nav-item.show .nav-link{
+    background-color: var(--color-bg);
+    border: 0 !important;
+    color: #fff;
+}
+
+.nav-tabs .nav-link:hover{
+    border: 0;
+    background-color: var(--color-bg);
+}
+
+.nav-tabs{
+    border-bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+}
+
 /* Hide sidebar on mobile */
 @media (max-width: 768px) {
     .toggleMenu{

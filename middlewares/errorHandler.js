@@ -11,6 +11,6 @@ module.exports = (err, req, res, next) => {
     }
 
     return res.status(500).json({
-        message: 'مشکل در برقراری ارتباط با سرور'
+        message: 'مشکل در برقراری ارتباط با سرور',
     });
 }
