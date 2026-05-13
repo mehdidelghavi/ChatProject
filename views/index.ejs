@@ -31,6 +31,8 @@
                         <% privateChats.forEach(roomItem => { %>
                             <li class="rounded-4 startPrivateChat" data-userid="<%= roomItem.other_user_id %>">
                                 <%= roomItem.other_user_name %>
+                                <span class="unseenCount <% if(roomItem.unseen_count <= 0){ %> d-none <% } %>"><%= roomItem.unseen_count %></span>
+                                
                             </li>
                         <% }) %>
                     </ul>
@@ -314,14 +316,27 @@ socket.on("openPrivateChat", (data) => {
     if(!$(".roomsLists").find(`li[data-userid=${data.otherUser[0].id}]`).length > 0){
         $(".roomsLists").append(`<li class="rounded-4 startPrivateChat" data-userid="${data.otherUser[0].id}">
                                 ${data.otherUser[0].username}
+                                <span class='unseenCount d-none'> 0 </span>
                             </li>`);
     }
+    $(`.roomsLists li[data-userid=${data.otherUser[0].id}] span`).text(0);
+    $(`.roomsLists li[data-userid=${data.otherUser[0].id}] span`).addClass("d-none");
 });
 
 socket.on("validationError", (data) => {
     showDangerToast(data.message);
 });
 
+
+socket.on("startedPrivateChat", (data)=> {
+    if(!$(".roomsLists").find(`li[data-userid=${data.userId}]`).length > 0){
+        $(".roomsLists").append(`<li class="rounded-4 startPrivateChat" data-userid="${data.userId}">
+                                ${data.username}
+                                <span class='unseenCount d-none'> 0 </span>
+                            </li>`);
+    }
+    socket.emit("joinPrivateChat", {room_id: data.room_id});
+});
 
 
 
@@ -383,6 +398,9 @@ socket.on("getPublicMessage", (data) => {
 // socket.emit("join_private_channel", ({room: 2, userId: userId}));
 socket.on("getPrivateMessage", (data) => {
     if (data.chat.room_id == privateRoomId){
+        if (data.chat.user_id != userId){
+            socket.emit("seenChat", {chatId: data.chat.id});
+        }
         let sore = "end";
         let self = "";
 
@@ -434,8 +452,16 @@ socket.on("getPrivateMessage", (data) => {
         privateChatContainer.appendChild(wrapper);
 
         privateChatContainer.scrollTop = privateChatContainer.scrollHeight;
+    } else {
+        if (data.chat.user_id != userId){
+            const unreadSpan = $(`.roomsLists li[data-userid=${data.chat.user_id}] span`);
+            const unreadCount = Number(unreadSpan.text());
+            unreadSpan.removeClass("d-none");
+            unreadSpan.text(unreadCount + 1);
+        }
     }
 });
+
 
 socket.on("UnAuthorized", (data) => {
     localStorage.removeItem("token");
@@ -452,7 +478,7 @@ function sendMessage(data){
 }
 
 $(".closePrivate").on("click", function (){
-    socket.emit("leavePrivate", privateRoomId);
+    // socket.emit("leavePrivate", privateRoomId);
     $("#main").css("display", "flex");
     $("#private-main").css("display", "none");
     $(".privateChatTyping").text("چت خصوصی");

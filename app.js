@@ -119,10 +119,11 @@ io.use((socket, next) => {
 });
 // Start socket connection
 io.on("connection", (socket) => {
+    socket.privateChannelIDS = [];
 
 
     // Handle user connection to socket and add user to online users Map
-    socket.on("identifyUser", (userData) => {
+    socket.on("identifyUser", async (userData) => {
         const userId = socket.user.id;
         if (!onlineUsers.has(userId)) {
 
@@ -135,17 +136,24 @@ io.on("connection", (socket) => {
         onlineUsers.get(userId).sockets.add(socket.id);
 
         socketIdToUserIdMap.set(socket.id, userId);
+
+        // Get User Private Chats 
+        const userPrivateChats = await chatController.getPrivateChats(userId);
+        userPrivateChats.forEach(privateChatItems => {
+            socket.privateChannelIDS.push(privateChatItems.room_id);
+            socket.join(`private_channel_${privateChatItems.room_id}`);
+        });
         emitOnlineUsers();
     });
 
     // Handle user typing in private chat
     socket.on("privateTyping", (data) => {
-        socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserTyping", { username: data.username, room: data.privateRoomId });
+        socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserTyping", { username: socket.user.username, room: data.privateRoomId });
     });
 
     // Handle user stop typing in private chat
     socket.on("privateStopTyping", (data) => {
-        socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserStopTyping", { username: data.username, room: data.privateRoomId });
+        socket.broadcast.to(`private_channel_${data.privateRoomId}`).emit("privateUserStopTyping", { username: socket.user.username, room: data.privateRoomId });
     });
 
     // Handle user typing in global chat
@@ -217,9 +225,9 @@ io.on("connection", (socket) => {
             // Handle Save Message To Database
             data.userId = socket.user.id;
             const sendMessage = await chatController.sendMessage(data);
-            io.to(socket.privateChannelId).emit("getPrivateMessage", sendMessage);
+            io.to(`private_channel_${data.privateRoomId}`).emit("getPrivateMessage", sendMessage);
         } else {
-            io.to(socket.id).to(socket.privateChannelId).emit("UnAuthorized", "لطفا مجدد وارد حساب کاربری خود شوید");
+            io.to(socket.id).to(`private_channel_${data.privateRoomId}`).emit("UnAuthorized", "لطفا مجدد وارد حساب کاربری خود شوید");
         }
     });
 
@@ -227,24 +235,44 @@ io.on("connection", (socket) => {
     // Handle start private chat for user
     socket.on("startPrivateChat", async (data) => {
         data.userId = socket.user.id;
+        username = socket.user.username;
         const isAuth = socketMiddleware.socketAuth(data.token);
         if (isAuth) {
+            const joinedPrivateChannels = socket.privateChannelIDS;
             // Check If Conversation (room) Exist
             const roomData = await chatController.getRoomFormUserIds(data);
-            socket.privateChannelId = privateChannelFlag + roomData.room;
-            socket.join(socket.privateChannelId);
+            const exitsPrivateChat = joinedPrivateChannels.includes(roomData.room);
+            if (!exitsPrivateChat) {
+                socket.privateChannelIDS.push(roomData.room);
+                socket.join(`private_channel_${roomData.room}`);
+                const otherUserSocketId = [...socketIdToUserIdMap.entries()].find(([k, v]) => v === data.otherUser)?.[0];
+                io.to(otherUserSocketId).emit("startedPrivateChat", { userId: data.userId, username: username, room_id: roomData.room });
+            }
+            // Seen Unread Chats
+            const seen = await chatController.seenChats({ userId: data.userId, room_id: roomData.room });
             io.to(socket.id).emit("openPrivateChat", roomData);
         } else {
             io.to(socket.id).to(socket.privateChannelId).emit("UnAuthorized", "لطفا مجدد وارد حساب کاربری خود شوید");
         }
     });
 
+    socket.on("joinPrivateChat", (data) => {
+        const userId = socket.user.id;
+        const room_id = data.room_id;
+        socket.privateChannelIDS.push(room_id);
+        socket.join(`private_channel_${room_id}`);
+    });
+
+    socket.on("seenChat", async (data) => {
+        await chatController.seenchat(data.chatId);
+    });
+
 
     // Handle if user close private chat
-    socket.on("leavePrivate", (data) => {
-        socket.privateChannelId = 0;
-        socket.leave("private_channel_" + data);
-    });
+    // socket.on("leavePrivate", (data) => {
+    //     socket.privateChannelId = 0;
+    //     socket.leave("private_channel_" + data);
+    // });
 
 
     // Handle user disconnecting 

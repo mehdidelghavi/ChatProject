@@ -3,12 +3,13 @@ const jwt = require("jsonwebtoken");
 const sanitizeHtml = require("sanitize-html");
 
 exports.getChat = async (req, res) => {
-    const token = req.query.token;
-    let user;
-    jwt.verify(token, process.env.JWT_SECRET, function (err, decoded) {
-        user = decoded;
-    })
-    const sql = `SELECT
+    try {
+        const token = req.query.token;
+        let user;
+        jwt.verify(token, process.env.JWT_SECRET, function (err, decoded) {
+            user = decoded;
+        })
+        const sql = `SELECT
                 t.*,
                 u.username
                 FROM (
@@ -20,24 +21,34 @@ exports.getChat = async (req, res) => {
                 ) AS t
                 JOIN users u ON t.user_id = u.id
                 ORDER BY t.id ASC`;
-    const [rows] = await db.execute(sql);
-    const conversationSQL = `SELECT 
+        const [rows] = await db.execute(sql);
+        const conversationSQL = `SELECT 
                             r.id AS room_id,
                             u2.id AS other_user_id,
-                            u2.username AS other_user_name
+                            u2.username AS other_user_name,
+                            (
+                                SELECT COUNT(*)
+                                FROM chats c
+                                WHERE c.room_id = r.id
+                                AND c.user_id != ru1.user_id
+                                AND c.seen_at IS NULL
+                            ) AS unseen_count
                             FROM rooms r
                             JOIN room_user ru1 ON ru1.room_id = r.id
                             JOIN room_user ru2 ON ru2.room_id = r.id AND ru2.user_id != ru1.user_id
                             JOIN users u2 ON u2.id = ru2.user_id
                             WHERE ru1.user_id = ?`;
-    const [rows2] = await db.execute(conversationSQL, [user.user.id]);
-    res.render('index', {
-        user: user.user,
-        isAuth: true,
-        publicChats: rows,
-        privateChats: rows2,
-        title: "پشت پرده"
-    });
+        const [rows2] = await db.execute(conversationSQL, [user.user.id]);
+        res.render('index', {
+            user: user.user,
+            isAuth: true,
+            publicChats: rows,
+            privateChats: rows2,
+            title: "پشت پرده"
+        });
+    } catch (e) {
+        console.log(e);
+    }
 }
 
 exports.sendMessage = async (data) => {
@@ -128,5 +139,39 @@ exports.getRoomFormUserIds = async (data) => {
         }
     } catch (e) {
         return e;
+    }
+}
+
+exports.seenchat = async (data) => {
+    const chatId = data;
+    const date = new Date();
+    const seenChatSQL = `UPDATE chats set seen_at = ? where id = ?`;
+    const [result] = await db.execute(seenChatSQL, [date, chatId]);
+}
+
+exports.getPrivateChats = async (data) => {
+    const userId = data;
+    const getPrivateChatsSQL = `SELECT room_id,user_id from room_user where user_id = ?`;
+    const [rows] = await db.execute(getPrivateChatsSQL, [userId]);
+    return rows;
+}
+
+exports.seenChats = async (data) => {
+    try {
+        const userId = data.userId;
+        const room_id = data.room_id;
+        const date = new Date();
+        const seenSQL = `UPDATE chats set seen_at = ? where room_id = ? and user_id != ?`;
+        const [result] = await db.execute(seenSQL, [date, room_id, userId]);
+        return {
+            message: "پیام ها با موفقیت دیده شدند",
+            success: true
+        };
+    } catch (e) {
+        return {
+            message: "خطایی در ارتباط با دیتابیس رخ داد",
+            errorMessage: e,
+            success: false
+        }
     }
 }
