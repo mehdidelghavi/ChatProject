@@ -39,11 +39,14 @@ exports.getChat = async (req, res) => {
                             JOIN users u2 ON u2.id = ru2.user_id
                             WHERE ru1.user_id = ?`;
         const [rows2] = await db.execute(conversationSQL, [user.user.id]);
+        const getAdminSQL = "SELECT * from users where role = 'admin'";
+        const [rows3] = await db.execute(getAdminSQL);
         res.render('index', {
             user: user.user,
             isAuth: true,
             publicChats: rows,
             privateChats: rows2,
+            admins: rows3,
             title: "پشت پرده"
         });
     } catch (e) {

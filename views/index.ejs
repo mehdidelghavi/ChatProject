@@ -23,7 +23,13 @@
             <div class="tab-content py-2" id="myTabContent">
                 <div class="tab-pane fade show active" id="onlineUsers-tab-pane" role="tabpanel" aria-labelledby="onlineUsers-tab" tabindex="0">
                     <ul class="usersOnlineLists">
+                        <% admins.forEach(adminItem => { %>
+                            <li class="rounded-4 startPrivateChat" data-userid="<%= adminItem.id %>">
+                                <b><%= adminItem.username %></b>
 
+                                <span class="badge badge-light"><%= adminItem.role %></span>
+                            </li>
+                        <% }) %>
                     </ul>
                 </div>
                 <div class="tab-pane fade" id="rooms-tab-pane" role="tabpanel" aria-labelledby="rooms-tab" tabindex="0">
@@ -256,14 +262,17 @@ socket.on("errorMessage", () => {
 });
 
 socket.on("updateOnlineUsers", (users) => {
-    usersOnlineLists.innerHTML = '';
     users.forEach( userItem => {
-        const listItem = document.createElement("li");
-        listItem.innerHTML = userItem.username + "<i class='fa fa-circle'></>";
-        listItem.classList.add("rounded-4");
-        listItem.classList.add("startPrivateChat");
-        listItem.setAttribute("data-userId", userItem.userId);
-        usersOnlineLists.appendChild(listItem);
+        const exists = usersOnlineLists.querySelector(`[data-userid="${userItem.userId}"]`);
+        console.log(exists);
+        if (!exists){
+            const listItem = document.createElement("li");
+            listItem.innerHTML = userItem.username + "<i class='fa fa-circle'></i>";
+            listItem.classList.add("rounded-4");
+            listItem.classList.add("startPrivateChat");
+            listItem.setAttribute("data-userId", userItem.userId);
+            usersOnlineLists.appendChild(listItem);
+        }
     });
 });
 
