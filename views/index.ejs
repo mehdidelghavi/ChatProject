@@ -133,9 +133,7 @@ let privateIsTyping = false;
 let usersTypingArray= new Set();
 userIdInput.value = userId;
 tokenInput.value = Token;
-const host = "http://192.168.1.100";
-const port = "3000";
-const socket = io(`${host}:${port}`,{
+const socket = io("<%= config.Host %>",{
     auth: {
         token: Token
     }
@@ -405,6 +403,10 @@ socket.on("getPublicMessage", (data) => {
 
 // socket.emit("join_private_channel", ({room: 2, userId: userId}));
 socket.on("getPrivateMessage", (data) => {
+    const listItem = $(`.roomsLists li[data-userid=${data.chat.user_id}]`);
+    if (listItem.length){
+        listItem.prependTo(".roomsLists");
+    }
     if (data.chat.room_id == privateRoomId){
         if (data.chat.user_id != userId){
             socket.emit("seenChat", {chatId: data.chat.id});
@@ -510,7 +512,7 @@ $(".toggleMenu").on("click", function (){
 
 $(".logout").on("click", function (){
     localStorage.removeItem("token");
-    window.location.href = `${host}:${port}/login`;
+    window.location.href = "<%= config.Host %>/login";
 });
 </script>
 </body>

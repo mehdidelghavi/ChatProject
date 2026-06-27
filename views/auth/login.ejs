@@ -28,7 +28,7 @@ loginForm.addEventListener("submit", function (e){
   e.preventDefault();
   const formData = new FormData(loginForm);
   const data = Object.fromEntries(formData.entries());
-  fetch("http://192.168.1.100:3000/login", {
+  fetch(`<%= config.Host %>/login`, {
     method: "POST",
     headers:{
       "Content-Type": "application/json"
@@ -48,7 +48,7 @@ loginForm.addEventListener("submit", function (e){
       }
     } else {
       localStorage.setItem('token', data.token);
-      window.location.href = `http://192.168.1.100:3000/?token=${data.token}`;
+      window.location.href = `<%= config.Host %>/?token=${data.token}`;
     }
   }).catch(err => {
     console.log(err);

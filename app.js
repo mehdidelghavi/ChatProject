@@ -49,6 +49,9 @@ app.use(flash());
 app.use(loginRoute);
 app.use(chatRoute);
 app.use(require('./middlewares/errorHandler'));
+app.locals.config = {
+    Host: process.env.HOST
+}
 
 function emitOnlineUsers() {
 

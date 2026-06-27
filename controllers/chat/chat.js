@@ -22,22 +22,44 @@ exports.getChat = async (req, res) => {
                 JOIN users u ON t.user_id = u.id
                 ORDER BY t.id ASC`;
         const [rows] = await db.execute(sql);
-        const conversationSQL = `SELECT 
-                            r.id AS room_id,
-                            u2.id AS other_user_id,
-                            u2.username AS other_user_name,
-                            (
-                                SELECT COUNT(*)
-                                FROM chats c
-                                WHERE c.room_id = r.id
-                                AND c.user_id != ru1.user_id
-                                AND c.seen_at IS NULL
-                            ) AS unseen_count
-                            FROM rooms r
-                            JOIN room_user ru1 ON ru1.room_id = r.id
-                            JOIN room_user ru2 ON ru2.room_id = r.id AND ru2.user_id != ru1.user_id
-                            JOIN users u2 ON u2.id = ru2.user_id
-                            WHERE ru1.user_id = ?`;
+        const conversationSQL = `SELECT
+                                    r.id AS room_id,
+                                    u2.id AS other_user_id,
+                                    u2.username AS other_user_name,
+
+                                    COUNT(
+                                        CASE
+                                            WHEN c.user_id != ru1.user_id AND c.seen_at IS NULL
+                                            THEN 1
+                                        END
+                                    ) AS unseen_count,
+
+                                    MAX(c.created_at) AS last_message_at
+
+                                FROM rooms r
+
+                                JOIN room_user ru1
+                                    ON ru1.room_id = r.id
+
+                                JOIN room_user ru2
+                                    ON ru2.room_id = r.id
+                                AND ru2.user_id != ru1.user_id
+
+                                JOIN users u2
+                                    ON u2.id = ru2.user_id
+
+                                LEFT JOIN chats c
+                                    ON c.room_id = r.id
+
+                                WHERE ru1.user_id = ?
+
+                                GROUP BY
+                                    r.id,
+                                    u2.id,
+                                    u2.username
+
+                                ORDER BY
+                                    last_message_at DESC`;
         const [rows2] = await db.execute(conversationSQL, [user.user.id]);
         const getAdminSQL = "SELECT * from users where role = 'Admin' OR role ='Support'";
         const [rows3] = await db.execute(getAdminSQL);
