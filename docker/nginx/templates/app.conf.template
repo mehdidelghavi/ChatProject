@@ -1,0 +1,74 @@
+# Processed by the nginx image's own entrypoint: every ${VAR} below is replaced
+# with the matching environment variable before nginx starts. Only DOMAIN and
+# APP_UPSTREAM are passed in, so nginx's own $variables ($host, $scheme, ...)
+# are left untouched.
+
+# Socket.IO opens with HTTP long-polling and then asks to upgrade to WebSocket.
+# A proxy must answer `Connection: upgrade` for that request and `Connection:
+# close` for everything else — this map picks the right one per request.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen      80 default_server;
+    listen      [::]:80 default_server;
+    server_name ${DOMAIN};
+
+    # Certbot's HTTP-01 challenge is fetched over plain HTTP on port 80.
+    # This block must stay above the redirect, or issuance fails.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        # $host carries no port, which is exactly right when HTTPS is on 443.
+        # HTTPS_PUBLIC_SUFFIX fills in ":port" when it is not.
+        return 301 https://$host${HTTPS_PUBLIC_SUFFIX}$request_uri;
+    }
+}
+
+server {
+    listen      443 ssl default_server;
+    listen      [::]:443 ssl default_server;
+    http2       on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    ssl_protocols             TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache         shared:SSL:10m;
+    ssl_session_timeout       1d;
+    ssl_session_tickets       off;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options    "nosniff"          always;
+    add_header X-Frame-Options           "SAMEORIGIN"       always;
+
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://${APP_UPSTREAM};
+
+        # WebSocket needs HTTP/1.1; the proxy_pass default is 1.0.
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # A chat socket sits idle between messages. The 60s default would drop
+        # it and the client would reconnect every minute.
+        proxy_read_timeout 7d;
+        proxy_send_timeout 7d;
+
+        # Buffering breaks the streaming nature of long-polling transport.
+        proxy_buffering off;
+    }
+}

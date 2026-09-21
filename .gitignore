@@ -3,3 +3,5 @@ node_modules
 dist
 coverage
 npm-debug.log
+logs/*
+!logs/.gitkeep

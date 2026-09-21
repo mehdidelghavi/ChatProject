@@ -1,0 +1,39 @@
+# Database service, kept in its own file and its own Compose project so it can
+# be started, stopped and rebuilt without touching the application.
+name: chat_project_db
+
+services:
+    db:
+        image: mariadb:11.4
+        container_name: chat_project_db
+        restart: unless-stopped
+        command: >
+            --character-set-server=utf8mb4
+            --collation-server=utf8mb4_unicode_ci
+        environment:
+            MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+            MARIADB_DATABASE: ${DB_DBNAME:-chat}
+            MARIADB_USER: ${DB_USER:-chat}
+            MARIADB_PASSWORD: ${DB_PASSWORD:-chatsecret}
+        volumes:
+            - db_data:/var/lib/mysql
+            # Anything in this directory runs on FIRST boot only, while the
+            # db_data volume is still empty.
+            - ./chat.sql:/docker-entrypoint-initdb.d/01-chat.sql:ro
+        ports:
+            - "127.0.0.1:3307:3306"     # host:container, loopback only
+        healthcheck:
+            test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+            interval: 5s
+            timeout: 5s
+            retries: 30
+            start_period: 30s
+        networks:
+            - chat_network
+
+volumes:
+    db_data:
+
+networks:
+    chat_network:
+        external: true

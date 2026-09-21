@@ -1,0 +1,44 @@
+# Application service.
+#
+# `name` pins the Compose project so this file, docker-compose.db.yml and
+# docker-compose.tools.yml stay three independent projects that meet on one
+# shared network. Without it all three would inherit the directory name as
+# project name and Compose would report the others as orphan containers on
+# every `up`.
+name: chat_project
+
+services:
+    app:
+        build:
+            context: .
+        container_name: chat_project_app
+        restart: unless-stopped
+        working_dir: /var/www/html
+        init: true                      # PID 1 that reaps zombies and forwards SIGTERM
+        ports:
+            # Loopback only: nginx is the public entrypoint now. Kept published
+            # so you can still curl the app directly while debugging.
+            - "127.0.0.1:3000:3000"     # host:container
+        volumes:
+            - .:/var/www/html
+            # Named volume layered ON TOP of the bind mount above. Without it the
+            # host directory (which has no node_modules) would shadow the one
+            # baked into the image and the app would not start.
+            - node_modules:/var/www/html/node_modules
+            - ./logs:/var/log/app
+        env_file:
+            - .env
+        extra_hosts:
+            # Lets the container reach services running on the host itself.
+            # Set DB_HOST=host.docker.internal in .env to talk to the host's
+            # MySQL instead of the containerised one.
+            - "host.docker.internal:host-gateway"
+        networks:
+            - chat_network
+
+volumes:
+    node_modules:
+
+networks:
+    chat_network:
+        external: true

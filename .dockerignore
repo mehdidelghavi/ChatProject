@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environment
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
+.fleet
+
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build / test output
+dist
+coverage
+
+# Runtime logs (bind-mounted at runtime, never baked into the image)
+logs/*
+
+# Docker & docs
+Dockerfile
+.dockerignore
+docker-compose*.yml
+*.md

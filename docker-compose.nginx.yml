@@ -1,0 +1,85 @@
+# Reverse proxy and TLS termination.
+#
+# nginx is the only service that publishes ports to the outside world. It
+# terminates HTTPS, redirects plain HTTP, and forwards everything else to the
+# app over the internal chat_network.
+name: chat_project_nginx
+
+services:
+    # Runs once and exits. Writes a self-signed certificate if none exists yet,
+    # so nginx has something to start with. See docker/certbot/init.sh.
+    certbot-init:
+        image: certbot/certbot:latest
+        container_name: chat_project_certbot_init
+        restart: "no"
+        environment:
+            DOMAIN: ${DOMAIN:-localhost}
+        volumes:
+            - ./docker/certbot/init.sh:/usr/local/bin/init.sh:ro
+            - certbot_certs:/etc/letsencrypt
+        entrypoint: ["/bin/sh", "/usr/local/bin/init.sh"]
+        networks:
+            - chat_network
+
+    nginx:
+        image: nginx:1.27-alpine
+        container_name: chat_project_nginx
+        restart: unless-stopped
+        depends_on:
+            certbot-init:
+                condition: service_completed_successfully
+        ports:
+            # Let's Encrypt validates over the PUBLIC port 80 and will not accept
+            # any other one, so HTTP_PORT must stay 80 on a server that issues
+            # certificates. Overriding it is only for a machine where something
+            # else already owns 80.
+            - "${HTTP_PORT:-80}:80"     # ACME challenge + redirect to HTTPS
+            - "${HTTPS_PORT:-443}:443"  # the real entrypoint
+        environment:
+            # Only these two are passed in. The .env file is deliberately NOT
+            # mounted here: envsubst would then also see HOST and port and could
+            # rewrite nginx's own variables inside the template.
+            DOMAIN: ${DOMAIN:-localhost}
+            APP_UPSTREAM: ${APP_UPSTREAM:-app:3000}
+            # Empty when HTTPS is on the standard 443. Set to ":8443" (leading
+            # colon) if HTTPS_PORT is something else, so the HTTP->HTTPS
+            # redirect points at a port that is actually listening.
+            HTTPS_PUBLIC_SUFFIX: ${HTTPS_PUBLIC_SUFFIX:-}
+        volumes:
+            - ./docker/nginx/templates:/etc/nginx/templates:ro
+            # Removes the demo site the image ships; see the file itself.
+            - ./docker/nginx/no-default.conf:/etc/nginx/conf.d/default.conf:ro
+            # The image runs everything in this directory before starting nginx.
+            - ./docker/nginx/cert-watcher.sh:/docker-entrypoint.d/99-cert-watcher.sh:ro
+            - ./logs/nginx:/var/log/nginx
+            - certbot_certs:/etc/letsencrypt
+            - certbot_webroot:/var/www/certbot
+        networks:
+            - chat_network
+
+    certbot:
+        image: certbot/certbot:latest
+        container_name: chat_project_certbot
+        restart: unless-stopped
+        depends_on:
+            - nginx
+        environment:
+            DOMAIN: ${DOMAIN:-localhost}
+            SSL_MODE: ${SSL_MODE:-selfsigned}
+            LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+            LETSENCRYPT_STAGING: ${LETSENCRYPT_STAGING:-true}
+        volumes:
+            - ./docker/certbot/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
+            - certbot_certs:/etc/letsencrypt
+            - certbot_webroot:/var/www/certbot
+        entrypoint: ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
+        networks:
+            - chat_network
+
+volumes:
+    certbot_certs:
+    certbot_webroot:
+
+networks:
+    chat_network:
+        external: true

@@ -1,0 +1,21 @@
+# Optional database admin UI. Not part of the running stack — start it only
+# when you need it, stop it when you are done.
+name: chat_project_tools
+
+services:
+    phpmyadmin:
+        image: phpmyadmin:5
+        container_name: chat_project_phpmyadmin
+        restart: unless-stopped
+        environment:
+            PMA_HOST: db                # resolved over chat_network
+            PMA_PORT: 3306
+            UPLOAD_LIMIT: 64M
+        ports:
+            - "127.0.0.1:8080:80"       # host:container, loopback only
+        networks:
+            - chat_network
+
+networks:
+    chat_network:
+        external: true
