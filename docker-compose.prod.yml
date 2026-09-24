@@ -1,0 +1,38 @@
+# Application service for the server, driven by the CI/CD pipeline.
+#
+# Differs from docker-compose.yml in two ways:
+#   - the image comes prebuilt from Docker Hub instead of `build:`
+#   - no `.:/var/www/html` bind mount: the code is the one baked into the image,
+#     so what runs is exactly what CI built from main
+#
+# Same project `name`, service and container_name as docker-compose.yml, so the
+# first deploy replaces the container that file started instead of fighting it
+# for port 3000.
+#
+# `chat_project_app:current` is a local tag, never pulled. The pipeline pulls
+# <user>/chat-project:<commit-sha> from Docker Hub and points this tag at it.
+# That keeps plain `docker compose -f docker-compose.prod.yml up -d` working on
+# the server by hand, and makes rollback a retag.
+name: chat_project
+
+services:
+    app:
+        image: chat_project_app:current
+        pull_policy: never
+        container_name: chat_project_app
+        restart: unless-stopped
+        init: true                      # PID 1 that reaps zombies and forwards SIGTERM
+        ports:
+            - "127.0.0.1:3000:3000"     # host:container, nginx is the public entrypoint
+        volumes:
+            - ./logs:/var/log/app
+        env_file:
+            - .env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        networks:
+            - chat_network
+
+networks:
+    chat_network:
+        external: true

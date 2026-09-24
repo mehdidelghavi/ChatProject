@@ -1,0 +1,209 @@
+# CI on every pull request into main, CD on every push to main.
+#
+#   PR development -> main   check + build the image (nothing is pushed)
+#   merge into main          check + build + push to Docker Hub + deploy
+#
+# Settings -> Secrets and variables -> Actions:
+#
+#   Variables  DOCKERHUB_USERNAME   Docker Hub account the image is pushed to
+#              DEPLOY_PATH          project directory on the server (holds .env)
+#
+#   Secrets    DOCKERHUB_TOKEN      Docker Hub access token, Read & Write
+#              SSH_HOST             server IP
+#              SSH_USERNAME         a user that can run docker
+#              SSH_PASSWORD         or SSH_PRIVATE_KEY instead
+#              SSH_PORT             optional, defaults to 22
+#              SSH_FINGERPRINT      optional, pins the server's host key
+#
+# The repository is public and so are its Actions logs: the server's address
+# and login stay in secrets, never in variables.
+
+name: CI/CD
+
+on:
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    # A newer commit makes an in-flight PR check pointless. A deploy is never
+    # cut off halfway.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+    IMAGE_NAME: chat-project
+    # workflow_dispatch can be started from any branch; only main publishes.
+    PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+
+jobs:
+    check:
+        name: Check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 20
+                  cache: npm
+
+            - run: npm ci
+
+            # There is no test suite yet (`npm test` is the npm placeholder), so
+            # this at least rejects a syntax error before it reaches the server.
+            # public/ is browser code and vendored bundles, not run by node.
+            - name: Syntax check
+              run: git ls-files -z -- '*.js' ':(exclude)public/' | xargs -0 -n1 node --check
+
+    build:
+        name: Build image
+        needs: check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+
+            # Falls back to a dummy namespace so a PR build still has a valid tag
+            # when the variable is not visible to it.
+            - name: Image tags
+              id: meta
+              env:
+                  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+              run: |
+                  repo="${DOCKERHUB_USERNAME:-local}/${IMAGE_NAME}"
+                  {
+                      echo "tags<<EOF"
+                      echo "${repo}:${GITHUB_SHA}"
+                      echo "${repo}:latest"
+                      echo "EOF"
+                  } >> "$GITHUB_OUTPUT"
+
+            - uses: docker/setup-buildx-action@v4
+
+            - if: env.PUBLISH == 'true'
+              uses: docker/login-action@v4
+              with:
+                  username: ${{ vars.DOCKERHUB_USERNAME }}
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+            - uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  push: ${{ env.PUBLISH == 'true' }}
+                  tags: ${{ steps.meta.outputs.tags }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+    deploy:
+        name: Deploy to server
+        needs: build
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        environment: production
+        concurrency:
+            group: production
+            cancel-in-progress: false
+        steps:
+            - uses: actions/checkout@v7
+
+            # Only the app's compose file travels with each deploy. .env, the
+            # database and nginx files on the server are left as they are.
+            - name: Upload docker-compose.prod.yml
+              uses: appleboy/scp-action@v1.0.0
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  port: ${{ secrets.SSH_PORT || 22 }}
+                  username: ${{ secrets.SSH_USERNAME }}
+                  password: ${{ secrets.SSH_PASSWORD }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+                  source: docker-compose.prod.yml
+                  target: ${{ vars.DEPLOY_PATH }}
+                  overwrite: true
+
+            - name: Pull image and restart app
+              uses: appleboy/ssh-action@v1.2.5
+              env:
+                  # Built here rather than passed from the build job: GitHub drops
+                  # a job output that happens to contain any secret's value, and
+                  # the Docker Hub username can easily contain the SSH one.
+                  IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+                  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+                  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+                  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  port: ${{ secrets.SSH_PORT || 22 }}
+                  username: ${{ secrets.SSH_USERNAME }}
+                  password: ${{ secrets.SSH_PASSWORD }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+                  envs: IMAGE,DEPLOY_PATH,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+                  script: |
+                      set -eu
+                      cd "$DEPLOY_PATH"
+
+                      compose() { docker compose -f docker-compose.prod.yml "$@"; }
+
+                      # Logged in only for the pull, so the token does not stay
+                      # in ~/.docker/config.json on the server.
+                      echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+                      docker pull "$IMAGE"
+                      docker logout
+
+                      docker network inspect chat_network >/dev/null 2>&1 || docker network create chat_network
+
+                      # Whatever runs now becomes the rollback target. On the very
+                      # first deploy that is the image docker-compose.yml built.
+                      if docker container inspect chat_project_app >/dev/null 2>&1; then
+                          docker tag "$(docker container inspect --format '{{.Image}}' chat_project_app)" chat_project_app:previous
+                      fi
+
+                      # nginx resolves `app` to an IP once, at startup. A recreated
+                      # container can come back on a different IP, and nginx would
+                      # keep sending traffic to the old one (502) until reloaded.
+                      reload_nginx() {
+                          if [ "$(docker container inspect --format '{{.State.Running}}' chat_project_nginx 2>/dev/null)" = "true" ]; then
+                              docker exec chat_project_nginx nginx -s reload
+                          fi
+                      }
+
+                      docker tag "$IMAGE" chat_project_app:current
+                      compose up -d
+                      reload_nginx
+
+                      # The Dockerfile HEALTHCHECK gets 20s of start period and 5
+                      # retries 15s apart, so it settles well inside two minutes.
+                      status=starting
+                      for _ in $(seq 1 24); do
+                          sleep 5
+                          status=$(docker container inspect --format '{{.State.Health.Status}}' chat_project_app)
+                          if [ "$status" = "healthy" ] || [ "$status" = "unhealthy" ]; then
+                              break
+                          fi
+                      done
+
+                      if [ "$status" != "healthy" ]; then
+                          echo "New image is $status, last app logs:"
+                          compose logs --tail 50 app
+                          if docker image inspect chat_project_app:previous >/dev/null 2>&1; then
+                              echo "Rolling back to the previous image"
+                              docker tag chat_project_app:previous chat_project_app:current
+                              compose up -d
+                              reload_nginx
+                          fi
+                          exit 1
+                      fi
+
+                      echo "Deployed $IMAGE"
+
+                      # Keep only the running image and the rollback one.
+                      docker images "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' \
+                          | grep -vxF "$IMAGE" \
+                          | xargs -r docker rmi >/dev/null 2>&1 || true
+                      docker image prune -f >/dev/null
