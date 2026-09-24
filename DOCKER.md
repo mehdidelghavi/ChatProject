@@ -8,6 +8,8 @@
 |---|---|
 | `Dockerfile` | ساخت ایمیج اپلیکیشن، دو مرحله‌ای |
 | `docker-compose.yml` | سرویس `app` |
+| `docker-compose.prod.yml` | سرویس `app` روی سرور، با ایمیج آماده از Docker Hub |
+| `.github/workflows/ci-cd.yml` | پایپ‌لاین CI/CD |
 | `docker-compose.db.yml` | سرویس `db` (MariaDB) |
 | `docker-compose.nginx.yml` | سرویس‌های `nginx`، `certbot-init` و `certbot` |
 | `docker-compose.tools.yml` | سرویس `phpmyadmin`، اختیاری |
@@ -339,6 +341,70 @@ ssh -L 3000:127.0.0.1:3000 user@SERVER_IP
 ```
 
 اگر روی سرور از قبل یک nginx سیستمی روی پورت ۸۰ نشسته، یکی از این دو کار را بکنید: یا آن را خاموش کنید تا nginx داکر پورت‌ها را بگیرد، یا nginx سیستمی را جلوی استک بگذارید و `proxy_pass` به پورت داکر بدهید. در حالت دوم صدور گواهی هم باید با همان nginx سیستمی انجام شود، نه با certbot داخل داکر.
+
+## CI/CD
+
+پایپ‌لاین در `.github/workflows/ci-cd.yml` است:
+
+| رویداد | کاری که انجام می‌شود |
+|---|---|
+| Pull Request به `main` | `npm ci`، چک سینتکس، ساخت ایمیج بدون push |
+| push یا merge روی `main` | همه‌ی موارد بالا + push به Docker Hub + دیپلوی روی سرور |
+
+ایمیج با دو تگ push می‌شود: SHA کامل کامیت و `latest`. سرور همیشه تگ SHA را می‌کشد، پس دقیقاً معلوم است چه کدی روی سرور است.
+
+### دیپلوی روی سرور چه می‌کند
+
+۱. فایل `docker-compose.prod.yml` را در `DEPLOY_PATH` کپی می‌کند. به `.env` و فایل‌های دیتابیس و nginx دست نمی‌زند.
+
+۲. ایمیج جدید را از Docker Hub می‌کشد و تگ محلی `chat_project_app:current` را رویش می‌گذارد. ایمیجی که تا این لحظه در حال اجرا بوده تگ `chat_project_app:previous` می‌گیرد.
+
+۳. کانتینر `app` را با ایمیج جدید بالا می‌آورد و nginx را reload می‌کند. nginx آدرس IP سرویس `app` را فقط موقع استارت resolve می‌کند و بدون reload، بعد از ساخته‌شدن دوباره‌ی کانتینر ممکن است 502 بدهد.
+
+۴. تا دو دقیقه منتظر `healthy` شدن کانتینر می‌ماند. اگر نشد، لاگ اپلیکیشن را چاپ می‌کند، به ایمیج `previous` برمی‌گردد و پایپ‌لاین را fail می‌کند.
+
+در این فایل bind mount کد وجود ندارد: کدی اجرا می‌شود که داخل ایمیج است، نه کدی که روی دیسک سرور است. پس روی سرور دیگر `git pull` لازم نیست.
+
+### تنظیمات در GitHub
+
+مسیر: Settings ← Secrets and variables ← Actions
+
+| نوع | نام | مقدار |
+|---|---|---|
+| Variable | `DOCKERHUB_USERNAME` | نام کاربری Docker Hub |
+| Variable | `DEPLOY_PATH` | مسیر پروژه روی سرور، همان‌جا که `.env` هست |
+| Secret | `DOCKERHUB_TOKEN` | Access Token با دسترسی Read & Write |
+| Secret | `SSH_HOST` | IP سرور |
+| Secret | `SSH_USERNAME` | کاربری که اجازه‌ی اجرای docker دارد |
+| Secret | `SSH_PASSWORD` | یا به‌جایش `SSH_PRIVATE_KEY` |
+| Secret | `SSH_PORT` | اختیاری، پیش‌فرض 22 |
+| Secret | `SSH_FINGERPRINT` | اختیاری، کلید هاست سرور را پین می‌کند |
+
+ریپازیتوری عمومی است و لاگ Actions هم عمومی است؛ برای همین آدرس و نام کاربری سرور در Secret هستند، نه Variable.
+
+اگر کاربر SSH غیر از `root` است، باید عضو گروه `docker` باشد:
+
+```bash
+sudo usermod -aG docker <user>
+```
+
+### کار دستی روی سرور
+
+```bash
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f app
+docker compose -f docker-compose.prod.yml restart app
+```
+
+برگشت دستی به نسخه‌ی قبلی:
+
+```bash
+docker tag chat_project_app:previous chat_project_app:current
+docker compose -f docker-compose.prod.yml up -d
+docker exec chat_project_nginx nginx -s reload
+```
+
+روی سرور دیگر از `docker-compose.yml` استفاده نکنید؛ آن فایل برای توسعه‌ی لوکال است و ایمیج را از کد روی دیسک می‌سازد.
 
 ## پشتیبان‌گیری
 
